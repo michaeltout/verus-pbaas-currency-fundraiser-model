@@ -29,11 +29,16 @@ class Fundraiser:
     self.currency.burn_change_price(price_burn)
     self.currency.burn_change_weight(weight_burn)
   
-  def accept_revenue(self, reserve_in):
-    to_burn = self.currency.reserve_to_supply(reserve_in)
-    self.balanced_burn(to_burn)
+  def balanced_burn_reserve(self, reserve_in):
+    price_burn = reserve_in * \
+        calc_burn_for_price(self.currency.r_ratio, self.target_ratio, self.std)
+    weight_burn = reserve_in - price_burn
 
-    return to_burn
+    self.currency.burn_change_price_reserve(price_burn)
+    self.currency.burn_change_weight_reserve(weight_burn)
+  
+  def accept_revenue(self, reserve_in):
+    return self.balanced_burn_reserve(reserve_in)
     
   def get_mintable(self):
     mintable = ((self.currency.r_ratio * self.currency.supply) /

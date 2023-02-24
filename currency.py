@@ -23,6 +23,7 @@ class Currency:
     self.total_fees = 0
     self.tx_fees = 0
     self.conversion_fees = 0
+    self.total_txs = 0
     
     self.cap_reserve_ratio()
 
@@ -36,6 +37,7 @@ class Currency:
       self.r_ratio = 1
   
   def reserve_to_supply(self, reserve_in):
+    self.total_txs = self.total_txs + 1
     conversion_fee_percentage = calc_conversion_fees(reserve_in)
     conversion_fee = (conversion_fee_percentage if conversion_fee_percentage > MINIMUM_SMARTTX_FEE else MINIMUM_SMARTTX_FEE)
     
@@ -52,12 +54,13 @@ class Currency:
     supply_output = calc_supply_in(self.supply, self.reserves, conversion_amount, self.r_ratio)
     
     self.supply = self.supply + supply_output
-    self.reserves = (self.reserves + reserve_in + fees_returned_to_reserve) - fees_paid_to_validators
+    self.reserves = (self.reserves + reserve_in) - fees_paid_to_validators
     self.update_price()
 
     return supply_output
     
   def supply_to_reserve(self, supply_in):
+    self.total_txs = self.total_txs + 1
     conversion_fee_supply_currency = calc_conversion_fees(supply_in)
     conversion_fee_reserve_currency = calc_reserve_out(self.reserves, self.supply, conversion_fee_supply_currency, self.r_ratio)
     conversion_fee = (conversion_fee_reserve_currency if conversion_fee_reserve_currency > MINIMUM_SMARTTX_FEE else MINIMUM_SMARTTX_FEE)
@@ -65,11 +68,10 @@ class Currency:
     fees_returned_to_reserve = conversion_fee / 2
     fees_paid_to_validators = (conversion_fee - fees_returned_to_reserve) + NATIVE_TRANSFER_FEE
     total_fees = fees_paid_to_validators + fees_returned_to_reserve
-    conversion_amount = supply_in
 
-    reserve_output_amount = calc_reserve_out(self.reserves, self.supply, conversion_amount, self.r_ratio)
+    reserve_output_amount = calc_reserve_out(self.reserves, self.supply, supply_in, self.r_ratio)
 
-    self.reserves = (self.reserves + fees_returned_to_reserve) - (reserve_output_amount + fees_paid_to_validators)
+    self.reserves = (self.reserves + fees_returned_to_reserve) - reserve_output_amount
     self.supply = self.supply - supply_in
     self.total_fees = self.total_fees + total_fees
     self.tx_fees = self.tx_fees + NATIVE_TRANSFER_FEE
@@ -79,6 +81,7 @@ class Currency:
     return reserve_output_amount - total_fees
   
   def prelaunch_carve_out(self, reserve_out):
+    self.total_txs = self.total_txs + 1
     old_reserves = self.reserves
 
     self.reserves = self.reserves - reserve_out
@@ -93,6 +96,7 @@ class Currency:
     return reserve_out - NATIVE_TRANSFER_FEE
   
   def burn_change_price(self, supply_in):
+    self.total_txs = self.total_txs + 1
     supply_burned = supply_in
 
     smarttx_fee = MINIMUM_SMARTTX_FEE
@@ -104,11 +108,27 @@ class Currency:
     self.tx_fees = self.tx_fees + total_fees
 
     self.supply = self.supply - supply_burned
-    self.reserves = (self.reserves + fees_returned_to_reserve) - fees_paid_to_validators
+    self.reserves = self.reserves + fees_returned_to_reserve
+
+    self.update_price()
+  
+  def burn_change_price_reserve(self, reserve_in):
+    self.total_txs = self.total_txs + 1
+
+    smarttx_fee = MINIMUM_SMARTTX_FEE
+    fees_returned_to_reserve = smarttx_fee / 2
+    fees_paid_to_validators = (smarttx_fee - fees_returned_to_reserve) + NATIVE_TRANSFER_FEE
+    total_fees = fees_returned_to_reserve + fees_paid_to_validators
+
+    self.total_fees = self.total_fees + total_fees
+    self.tx_fees = self.tx_fees + total_fees
+
+    self.reserves = (self.reserves + reserve_in) - fees_paid_to_validators
 
     self.update_price()
   
   def burn_change_weight(self, supply_in):
+    self.total_txs = self.total_txs + 1
     old_supply = self.supply
 
     supply_burned = supply_in
@@ -122,13 +142,32 @@ class Currency:
     self.tx_fees = self.tx_fees + total_fees
 
     self.supply = self.supply - supply_burned
-    self.reserves = (self.reserves + fees_returned_to_reserve) - fees_paid_to_validators
+    self.reserves = self.reserves + fees_returned_to_reserve
 
     self.r_ratio = self.r_ratio * (old_supply / self.supply)
     self.cap_reserve_ratio()
     self.update_price()
+  
+  def burn_change_weight_reserve(self, reserve_in):
+    self.total_txs = self.total_txs + 1
+    old_reserves = self.reserves
+
+    smarttx_fee = MINIMUM_SMARTTX_FEE
+    fees_returned_to_reserve = smarttx_fee / 2
+    fees_paid_to_validators = (smarttx_fee - fees_returned_to_reserve) + NATIVE_TRANSFER_FEE
+    total_fees = fees_returned_to_reserve + fees_paid_to_validators
+
+    self.total_fees = self.total_fees + total_fees
+    self.tx_fees = self.tx_fees + total_fees
+
+    self.reserves = (self.reserves + reserve_in) - fees_paid_to_validators
+    self.r_ratio = self.r_ratio * (self.reserves / old_reserves)
+    self.cap_reserve_ratio()
+
+    self.update_price()
     
   def mint_change_weight(self, supply_out):
+    self.total_txs = self.total_txs + 1
     old_supply = self.supply
 
     smarttx_fee = MINIMUM_SMARTTX_FEE
@@ -140,7 +179,7 @@ class Currency:
     self.tx_fees = self.tx_fees + total_fees
 
     self.supply = self.supply + supply_out
-    self.reserves = (self.reserves + fees_returned_to_reserve) - fees_paid_to_validators
+    self.reserves = self.reserves + fees_returned_to_reserve
 
     self.r_ratio = self.r_ratio * (old_supply / self.supply)
     self.cap_reserve_ratio()

@@ -12,7 +12,6 @@ class Project:
     self.reserve_returns = 0
     self.invested_fractional = 0
     self.revenues_reserve = 0
-    self.revenues_burned_fractional = 0
 
     self.total_fractional_raised = 0
     self.total_reserve_raised = 0
@@ -38,22 +37,15 @@ class Project:
       self.reserve_returns = self.reserve_returns + self.fundraiser.divest(investment_out_supply)
 
     self.revenues_reserve = self.revenues_reserve + revenues_reserve
-    
-    revenue_result = 0
-    
-    if revenues_reserve > 0:
-      revenue_result = self.fundraiser.accept_revenue(revenues_reserve)
 
-    self.revenues_burned_fractional = self.revenues_burned_fractional + revenue_result
+    if revenues_reserve > 0:
+      self.fundraiser.accept_revenue(revenues_reserve)
+
     self.budget_deficit = self.budget_deficit + reserve_income_required
 
     funds_available = 0
 
     if self.budget_deficit > 0:
-      # reserve_raised = self.fundraiser.currency.prelaunch_carve_out(self.budget_deficit)
-      # self.budget_deficit = self.budget_deficit - reserve_raised
-      # self.total_reserve_raised = self.total_reserve_raised + reserve_raised
-
       if is_prelaunch:
         reserve_raised = self.fundraiser.currency.prelaunch_carve_out(self.budget_deficit)
         self.budget_deficit = self.budget_deficit - reserve_raised
